@@ -204,10 +204,12 @@ let dragging = false, lastMX, lastMY;
 let zoom = 1.1;
 let nightMode = false;
 let petalsActive = true;
+let isInitialized = false;
 
 const branches = [];
 const blossoms = [];
 const fallingPetals = [];
+const stars = [];
 
 function rotateAround(vx, vy, vz, ax, ay, az, theta) {
   const cos = Math.cos(theta), sin = Math.sin(theta), t2 = 1-cos;
@@ -234,7 +236,6 @@ function buildTree3D(x, y, z, dx, dy, dz, length, depth, totalDepth = 8) {
   branches.push({ x1:x, y1:y, z1:z, x2:ex, y2:ey, z2:ez, depth, length });
 
   if (depth <= 2) {
-    // Tăng vọt số lượng hoa và độ lớn của cụm hoa để làm dày tán
     for (let i = 0; i < 40; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
@@ -275,17 +276,6 @@ function buildTree3D(x, y, z, dx, dy, dz, length, depth, totalDepth = 8) {
     buildTree3D(ex, ey, ez, ndx, ndy, ndz, length*(0.7 + Math.random()*0.1), depth-1, totalDepth);
   }
 }
-
-// Trả lại 1 thân cây duy nhất, thanh mảnh và tập trung toàn bộ vào tán hoa
-buildTree3D(0, 160, 0, 0, -1, 0, 75, 8);
-
-const stars = Array.from({length:200}, () => ({
-  x: (Math.random()-0.5)*2000,
-  y: (Math.random()-0.5)*1200,
-  z: Math.random()*500+200,
-  r: Math.random()*1.5+0.3,
-  tw: Math.random()*Math.PI*2
-}));
 
 function project(x, y, z) {
   const cosY = Math.cos(rotY + camX * 0.003);
@@ -329,6 +319,7 @@ function spawnPetal() {
 }
 
 function draw() {
+  if (!isInitialized) return;
   requestAnimationFrame(draw);
   t += 0.012;
 
@@ -362,7 +353,6 @@ function draw() {
   c.fillStyle = grd;
   c.fillRect(0, 0, W, H);
 
-  // Bóng đổ mờ nhẹ dưới chân cây
   const shadowBase = project(0, 160, 0);
   const shadowW = 100 * zoom * shadowBase.d;
   const shadowH = 25 * zoom * shadowBase.d;
@@ -384,7 +374,6 @@ function draw() {
     const p1 = project(br.x1, br.y1, br.z1);
     const p2 = project(br.x2, br.y2, br.z2);
 
-    // Hệ số độ dày thân cây được làm nhỏ gọn lại
     const baseScale = br.depth > 5 ? (br.depth - 4) * 0.5 : 0.7;
 
     let curW1 = Math.max(0.8, br.length * 0.08 * p1.d * baseScale);
@@ -521,8 +510,48 @@ function draw() {
   c.fillRect(0, 0, W, H);
 }
 
-draw();
+// KHỞI TẠO CẢNH SCENE VÀ GỌI DRAW (THỰC HIỆN LAZY LOAD)
+function initScene() {
+  if (isInitialized) return;
+  isInitialized = true;
 
+  // Tính toán lưới tọa độ nhánh
+  buildTree3D(0, 160, 0, 0, -1, 0, 75, 8);
+
+  // Tạo các mảng hạt sao
+  for(let i=0; i<200; i++) {
+    stars.push({
+      x: (Math.random()-0.5)*2000,
+      y: (Math.random()-0.5)*1200,
+      z: Math.random()*500+200,
+      r: Math.random()*1.5+0.3,
+      tw: Math.random()*Math.PI*2
+    });
+  }
+
+  // Tự động xoay camera khi không kéo chuột
+  setInterval(() => { if (!dragging) rotY += 0.003; }, 16);
+
+  // Khởi động vòng lặp render
+  draw();
+}
+
+// HỆ THỐNG LAZY LOAD BẰNG INTERSECTION OBSERVER
+const observer = new IntersectionObserver((entries, obs) => {
+  entries.forEach(entry => {
+    // Chỉ kích hoạt render khi phần tử xuất hiện tối thiểu trong vùng nhìn thấy
+    if (entry.isIntersecting) {
+      initScene();
+      obs.disconnect(); // Ngừng theo dõi sự kiện sau khi đã khởi tạo để giải phóng bộ nhớ
+    }
+  });
+}, {
+  threshold: 0.1 // 10% chiều cao của canvas xuất hiện thì sẽ load
+});
+
+observer.observe(ctx2);
+
+// SỰ KIỆN TƯƠNG TÁC
 ctx2.addEventListener('mousedown', e => { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
 ctx2.addEventListener('mousemove', e => {
   if (!dragging) return;
@@ -549,8 +578,6 @@ window.addEventListener('wheel', e => {
   zoom *= e.deltaY > 0 ? 0.95 : 1.05;
   zoom = Math.max(0.4, Math.min(2.5, zoom));
 });
-
-setInterval(() => { if (!dragging) rotY += 0.003; }, 16);
 
 function togglePetals() { petalsActive = !petalsActive; }
 function toggleNight() { nightMode = !nightMode; }
