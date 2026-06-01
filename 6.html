@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoa Anh Đào - Món Quà</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Noto+Serif:ital,wght@0,400;1,400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0008;
+    overflow: hidden;
+    font-family: 'Noto Serif', serif;
+    color: #f8e8f0;
+  }
+
+  canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
+
+  #ui {
+    position: fixed; z-index: 10;
+    bottom: 30px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px; align-items: center;
+  }
+
+  .btn {
+    background: rgba(255,150,180,0.15);
+    border: 1px solid rgba(255,150,180,0.4);
+    color: #ffb8d0;
+    padding: 10px 22px;
+    border-radius: 40px;
+    cursor: pointer;
+    font-family: 'Noto Serif', serif;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    backdrop-filter: blur(8px);
+    transition: all 0.3s;
+  }
+  .btn:hover { background: rgba(255,150,180,0.3); border-color: rgba(255,180,200,0.7); }
+
+  /* Letter overlay */
+  #letter-overlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5,0,8,0.7);
+    backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  #letter-overlay.open { opacity: 1; pointer-events: all; }
+
+  #letter {
+    position: relative;
+    width: min(560px, 92vw);
+    transform: rotateX(20deg) scale(0.85);
+    transition: transform 1.2s cubic-bezier(0.34,1.56,0.64,1);
+    transform-style: preserve-3d;
+    perspective: 1000px;
+  }
+  #letter-overlay.open #letter { transform: rotateX(0deg) scale(1); }
+
+  .envelope-flap {
+    background: linear-gradient(135deg, #3d0a1e, #6b1535);
+    width: 100%;
+    height: 44px;
+    border-radius: 4px 4px 0 0;
+    clip-path: polygon(0 100%, 50% 0, 100% 100%);
+    margin-bottom: -2px;
+    box-shadow: 0 -2px 12px rgba(200,50,100,0.2);
+  }
+
+  .letter-body {
+    background: linear-gradient(160deg, #1a0510 0%, #120308 100%);
+    border: 1px solid rgba(255,130,160,0.25);
+    border-radius: 0 0 8px 8px;
+    padding: 36px 38px 32px;
+    box-shadow: 0 20px 60px rgba(180,50,100,0.3), inset 0 0 60px rgba(180,50,100,0.04);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .letter-body::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='1' fill='%23ff80a0' fill-opacity='0.06'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  .petal-deco {
+    position: absolute; top: 16px; right: 20px;
+    font-size: 22px; opacity: 0.4;
+  }
+
+  .letter-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: rgba(255,160,190,0.6);
+    letter-spacing: 0.12em;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  .letter-text {
+    font-size: 14.5px;
+    line-height: 1.95;
+    color: rgba(248,220,235,0.9);
+    white-space: pre-wrap;
+  }
+
+  .letter-sign {
+    margin-top: 22px;
+    text-align: right;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: rgba(255,160,190,0.75);
+  }
+
+  .close-btn {
+    position: absolute;
+    top: -14px; right: -14px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: rgba(180,50,90,0.7);
+    border: 1px solid rgba(255,130,160,0.4);
+    color: #ffb8d0;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .close-btn:hover { background: rgba(220,70,110,0.8); }
+
+  #hint {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 10;
+    font-size: 12px;
+    color: rgba(255,160,190,0.45);
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    font-family: 'Noto Serif', serif;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="hint">Kéo để xoay • Cuộn để thu phóng</div>
+
+<div id="ui">
+  <button class="btn" onclick="togglePetals()">🌸 Rụng cánh</button>
+  <button class="btn" onclick="openLetter()">💌 Mở thư</button>
+  <button class="btn" onclick="toggleNight()">🌙 Đổi nền</button>
+</div>
+
+<div id="letter-overlay" onclick="closeLetter(event)">
+  <div id="letter">
+    <div class="envelope-flap"></div>
+    <div class="letter-body">
+      <span class="petal-deco">🌸</span>
+      <div class="letter-title">— Gửi Hà An —</div>
+      <div class="letter-text">Cảm ơn Hà An vì thời gian trước đã chiếu cố cho Phan Đoàn nhé.
+
+Sau một khoảng thời gian không nhắn tin cho nhau nữa, Đoàn nhận ra người chưa thật sự ổn định là Đoàn — điều đó đã khiến nhiều lời nói của Đoàn làm Hà An buồn nhiều.
+
+Nên đây như món quà cảm ơn Hà An nhiều nhen. Thời gian qua Đoàn cũng đã suy nghĩ rất nhiều. Vì Đoàn đã từng trong mối quan hệ độc hại nên nhận thấy việc kèm nhau 24/7 là bình thường.
+
+Nếu được... không biết Đoàn có thể bước lại một bước vào cuộc sống của Hà An không ạ...</div>
+      <div class="letter-sign">— Đoàn 🌸</div>
+      <button class="close-btn" onclick="closeLetter()">✕</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+if (!gl) {
+  document.body.innerHTML += '<div style="color:#ff80a0;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">WebGL not supported</div>';
+}
+
+const ctx2 = document.createElement('canvas');
+ctx2.style.cssText = 'position:fixed;top:0;left:0;z-index:1;';
+document.body.insertBefore(ctx2, canvas);
+canvas.style.display = 'none';
+const c = ctx2.getContext('2d');
+
+let W, H;
+function resize() {
+  W = ctx2.width = window.innerWidth;
+  H = ctx2.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+let camX = 0, camY = 0, camZ = 0;
+let rotX = -0.25, rotY = 0;
+let dragging = false, lastMX, lastMY;
+let zoom = 1.1;
+let nightMode = false;
+let petalsActive = true;
+
+const branches = [];
+const blossoms = [];
+const fallingPetals = [];
+
+function rotateAround(vx, vy, vz, ax, ay, az, theta) {
+  const cos = Math.cos(theta), sin = Math.sin(theta), t2 = 1-cos;
+  return [
+    (t2*ax*ax+cos)*vx    + (t2*ax*ay-sin*az)*vy + (t2*ax*az+sin*ay)*vz,
+    (t2*ax*ay+sin*az)*vx + (t2*ay*ay+cos)*vy    + (t2*ay*az-sin*ax)*vz,
+    (t2*ax*az-sin*ay)*vx + (t2*ay*az+sin*ax)*vy + (t2*az*az+cos)*vz
+  ];
+}
+
+function perpendicular(vx, vy, vz) {
+  if (Math.abs(vx) < 0.9) { const l=Math.sqrt(vy*vy+vz*vz)+1e-9; return [0,-vz/l,vy/l]; }
+  else { const l=Math.sqrt(vx*vx+vz*vz)+1e-9; return [vz/l,0,-vx/l]; }
+}
+
+function buildTree3D(x, y, z, dx, dy, dz, length, depth, totalDepth = 8) {
+  if (depth === 0 || length < 1.2) return;
+
+  const curve = depth >= 6 ? Math.sin(depth * 0.8) * 6 : 0;
+  const ex = x + dx * length + curve;
+  const ey = y + dy * length;
+  const ez = z + dz * length;
+  
+  branches.push({ x1:x, y1:y, z1:z, x2:ex, y2:ey, z2:ez, depth, length });
+
+  if (depth <= 2) {
+    // Tăng vọt số lượng hoa và độ lớn của cụm hoa để làm dày tán
+    for (let i = 0; i < 40; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const rad = Math.random() * 55; 
+      blossoms.push({
+        x: ex + rad * Math.sin(phi) * Math.cos(theta),
+        y: ey + rad * Math.sin(phi) * Math.sin(theta),
+        z: ez + rad * Math.cos(phi),
+        r: Math.random()*3.8+2.5,
+        opacity: Math.random()*0.5+0.5,
+        hue: Math.random()*30-15
+      });
+    }
+    return;
+  }
+
+  const numChildren = depth >= 7 ? 4 : (depth === 6 ? 3 : 2);
+  const spreadAngle = depth >= 6 ? 0.9 + Math.random()*0.2 : 0.4 + Math.random()*0.2; 
+  const [px, py, pz] = perpendicular(dx, dy, dz);
+  const baseAzimuth = Math.random() * Math.PI * 2;
+
+  for (let i = 0; i < numChildren; i++) {
+    const azimuth = baseAzimuth + (i / numChildren) * Math.PI * 2;
+    const [rx, ry, rz] = rotateAround(px, py, pz, dx, dy, dz, azimuth);
+    let [ndx, ndy, ndz] = rotateAround(dx, dy, dz, rx, ry, rz, spreadAngle);
+
+    const nl = Math.sqrt(ndx*ndx + ndy*ndy + ndz*ndz) + 1e-9;
+    ndx /= nl; ndy /= nl; ndz /= nl;
+
+    const upBias = depth >= 6 ? 0.3 : (depth <= 3 ? -0.1 : 0.1); 
+    ndx *= (1-Math.abs(upBias)); 
+    ndy = ndy*(1-Math.abs(upBias)) - upBias; 
+    ndz *= (1-Math.abs(upBias));
+    
+    const nl2 = Math.sqrt(ndx*ndx + ndy*ndy + ndz*ndz) + 1e-9;
+    ndx /= nl2; ndy /= nl2; ndz /= nl2;
+
+    buildTree3D(ex, ey, ez, ndx, ndy, ndz, length*(0.7 + Math.random()*0.1), depth-1, totalDepth);
+  }
+}
+
+// Trả lại 1 thân cây duy nhất, thanh mảnh và tập trung toàn bộ vào tán hoa
+buildTree3D(0, 160, 0, 0, -1, 0, 75, 8);
+
+const stars = Array.from({length:200}, () => ({
+  x: (Math.random()-0.5)*2000,
+  y: (Math.random()-0.5)*1200,
+  z: Math.random()*500+200,
+  r: Math.random()*1.5+0.3,
+  tw: Math.random()*Math.PI*2
+}));
+
+function project(x, y, z) {
+  const cosY = Math.cos(rotY + camX * 0.003);
+  const sinY = Math.sin(rotY + camX * 0.003);
+  let rx = x * cosY - z * sinY;
+  let rz = x * sinY + z * cosY;
+
+  const cosX = Math.cos(rotX + camY * 0.003);
+  const sinX = Math.sin(rotX + camY * 0.003);
+  let ry = y * cosX - rz * sinX;
+  let rz2 = y * sinX + rz * cosX;
+
+  const fov = 700 * zoom;
+  const d = fov / (fov * 0.01 + rz2 + 950); 
+  return {
+    sx: W/2 + rx * d,
+    sy: H/2 + 80 + ry * d,
+    d, depth: rz2
+  };
+}
+
+let t = 0;
+
+function spawnPetal() {
+  if (!petalsActive) return;
+  const b = blossoms[Math.floor(Math.random()*blossoms.length)];
+  fallingPetals.push({
+    x: b.x + (Math.random()-0.5)*5,
+    y: b.y,
+    z: b.z + (Math.random()-0.5)*5,
+    vx: (Math.random()-0.5)*0.8,
+    vy: 0.3 + Math.random()*0.4,
+    vz: (Math.random()-0.5)*0.5,
+    rot: Math.random()*Math.PI*2,
+    vrot: (Math.random()-0.5)*0.08,
+    life: 1,
+    size: Math.random()*4+3,
+    hue: Math.random()*40-20,
+    swing: Math.random()*Math.PI*2
+  });
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  t += 0.012;
+
+  const bg = nightMode
+    ? c.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H))
+    : c.createRadialGradient(W/2, H*0.4, 0, W/2, H/2, Math.max(W,H));
+  if (nightMode) {
+    bg.addColorStop(0, '#0f0018');
+    bg.addColorStop(1, '#030008');
+  } else {
+    bg.addColorStop(0, '#1a0020');
+    bg.addColorStop(0.5, '#0d0018');
+    bg.addColorStop(1, '#050010');
+  }
+  c.fillStyle = bg;
+  c.fillRect(0, 0, W, H);
+
+  stars.forEach(s => {
+    const p = project(s.x, s.y, s.z);
+    const twinkle = 0.5 + 0.5*Math.sin(t*1.5 + s.tw);
+    c.beginPath();
+    c.arc(p.sx, p.sy, s.r * twinkle, 0, Math.PI*2);
+    c.fillStyle = `rgba(255,220,240,${0.3*twinkle})`;
+    c.fill();
+  });
+
+  const gp = project(0, 80, 0);
+  const grd = c.createRadialGradient(gp.sx, gp.sy, 0, gp.sx, gp.sy, 160*zoom);
+  grd.addColorStop(0, 'rgba(255,100,150,0.12)');
+  grd.addColorStop(1, 'rgba(255,100,150,0)');
+  c.fillStyle = grd;
+  c.fillRect(0, 0, W, H);
+
+  // Bóng đổ mờ nhẹ dưới chân cây
+  const shadowBase = project(0, 160, 0);
+  const shadowW = 100 * zoom * shadowBase.d;
+  const shadowH = 25 * zoom * shadowBase.d;
+  const shadowGrd = c.createRadialGradient(shadowBase.sx, shadowBase.sy, 0, shadowBase.sx, shadowBase.sy, shadowW);
+  shadowGrd.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+  shadowGrd.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  c.beginPath();
+  c.ellipse(shadowBase.sx, shadowBase.sy, shadowW, shadowH, 0, 0, Math.PI * 2);
+  c.fillStyle = shadowGrd;
+  c.fill();
+
+  const sortedBranches = branches.slice().sort((a,b) => {
+    const pa = project((a.x1+a.x2)/2, (a.y1+a.y2)/2, (a.z1+a.z2)/2);
+    const pb = project((b.x1+b.x2)/2, (b.y1+b.y2)/2, (b.z1+b.z2)/2);
+    return pb.depth - pa.depth;
+  });
+
+  sortedBranches.forEach(br => {
+    const p1 = project(br.x1, br.y1, br.z1);
+    const p2 = project(br.x2, br.y2, br.z2);
+
+    // Hệ số độ dày thân cây được làm nhỏ gọn lại
+    const baseScale = br.depth > 5 ? (br.depth - 4) * 0.5 : 0.7;
+
+    let curW1 = Math.max(0.8, br.length * 0.08 * p1.d * baseScale);
+    let curW2 = Math.max(0.4, br.length * 0.05 * p2.d * (baseScale * 0.8));
+
+    const dx = p2.sx - p1.sx, dy = p2.sy - p1.sy;
+    const L = Math.sqrt(dx*dx + dy*dy) + 1e-9;
+    const nx = -dy / L, ny = dx / L; 
+
+    const A = [p1.sx + nx*curW1, p1.sy + ny*curW1];
+    const B = [p2.sx + nx*curW2, p2.sy + ny*curW2];
+    const C = [p2.sx - nx*curW2, p2.sy - ny*curW2];
+    const D = [p1.sx - nx*curW1, p1.sy - ny*curW1];
+
+    const g = c.createLinearGradient(p1.sx, p1.sy, p2.sx, p2.sy);
+    if (br.depth > 6) {
+      g.addColorStop(0, 'rgba(55,35,28,0.98)');
+      g.addColorStop(0.5, 'rgba(78,52,40,0.96)');
+      g.addColorStop(1, 'rgba(48,30,24,0.92)');
+    } else {
+      g.addColorStop(0, 'rgba(88,60,45,0.92)');
+      g.addColorStop(0.5, 'rgba(110,80,60,0.90)');
+      g.addColorStop(1, 'rgba(70,45,35,0.88)');
+    }
+
+    c.beginPath();
+    c.moveTo(A[0], A[1]);
+    c.lineTo(B[0], B[1]);
+    c.lineTo(C[0], C[1]);
+    c.lineTo(D[0], D[1]);
+    c.closePath();
+    
+    c.fillStyle = g;
+    c.fill();
+
+    c.lineWidth = Math.max(0.5, (curW1 + curW2) * 0.1);
+    c.strokeStyle = 'rgba(10,6,8,0.8)';
+    c.stroke();
+
+    c.beginPath();
+    c.moveTo(A[0], A[1]);
+    c.lineTo(B[0], B[1]);
+    c.lineWidth = Math.max(0.3, (curW1 + curW2) * 0.05);
+    c.strokeStyle = 'rgba(220,140,160,0.04)';
+    c.stroke();
+
+    const segments = Math.max(2, Math.floor(L / 12));
+    for (let i = 0; i <= segments; i++) {
+      const tSeg = i / segments;
+      const cx = p1.sx + dx * tSeg;
+      const cy = p1.sy + dy * tSeg;
+      const localW = curW1 * (1 - tSeg) + curW2 * tSeg;
+
+      const strokes = 1 + Math.floor(localW * 0.05);
+      for (let s = 0; s < strokes; s++) {
+        const off = (Math.random() - 0.5) * localW * 0.6;
+        const lx = cx + nx * off + (Math.random() - 0.5) * 1.5;
+        const ly = cy + ny * off + (Math.random() - 0.5) * 1.5;
+        const ex = lx + nx * (localW * 0.15) * (Math.random() * 0.8 + 0.4);
+        const ey = ly + ny * (localW * 0.15) * (Math.random() * 0.8 + 0.4);
+        c.beginPath();
+        c.moveTo(lx, ly);
+        c.lineTo(ex, ey);
+        c.lineWidth = Math.max(0.2, localW * 0.04 * Math.random());
+        c.strokeStyle = `rgba(20,12,14,${0.15 * Math.random() + 0.1})`;
+        c.stroke();
+      }
+    }
+  });
+
+  const sakuraMist = project(0, -50, 0);
+  const mist = c.createRadialGradient(sakuraMist.sx, sakuraMist.sy, 0, sakuraMist.sx, sakuraMist.sy, 350);
+  mist.addColorStop(0, 'rgba(255,180,210,0.12)');
+  mist.addColorStop(1, 'rgba(255,180,210,0)');
+  c.fillStyle = mist;
+  c.fillRect(0,0,W,H);
+
+  if (petalsActive || Math.random() > 0.01) {
+    blossoms.forEach(bl => {
+      const sway = Math.sin(t * 0.6 + bl.x * 0.05) * 1.5;
+      const p = project(bl.x + sway, bl.y, bl.z);
+      if (p.depth < -600) return;
+      const sz = bl.r * p.d * 1.2;
+      const alpha = bl.opacity * Math.min(1, p.d * 2);
+
+      c.save();
+      c.translate(p.sx, p.sy);
+      for (let i = 0; i < 5; i++) {
+        const a = (i/5)*Math.PI*2 + t*0.2;
+        c.beginPath();
+        c.ellipse(Math.cos(a)*sz*0.6, Math.sin(a)*sz*0.6, sz*0.7, sz*0.4, a, 0, Math.PI*2);
+        c.fillStyle = `hsla(${340+bl.hue},${70+bl.hue}%,${75+bl.hue}%,${alpha*0.7})`;
+        c.fill();
+      }
+      c.beginPath();
+      c.arc(0, 0, sz*0.35, 0, Math.PI*2);
+      c.fillStyle = `rgba(255,220,230,${alpha*0.9})`;
+      c.fill();
+      c.restore();
+    });
+  }
+
+  if (petalsActive && Math.random() < 0.4) spawnPetal();
+
+  for (let i = fallingPetals.length-1; i >= 0; i--) {
+    const fp = fallingPetals[i];
+    fp.swing += 0.05;
+    fp.x += fp.vx + Math.sin(fp.swing)*0.4;
+    fp.y += fp.vy;
+    fp.z += fp.vz;
+    fp.rot += fp.vrot;
+    fp.life -= 0.004;
+    if (fp.y > 150 || fp.life <= 0) { fallingPetals.splice(i,1); continue; }
+
+    const p = project(fp.x, fp.y, fp.z);
+    c.save();
+    c.translate(p.sx, p.sy);
+    c.rotate(fp.rot);
+    c.globalAlpha = fp.life * Math.min(1, p.d*1.5);
+    const sz = fp.size * p.d;
+    c.beginPath();
+    c.ellipse(0, 0, sz, sz*0.55, 0, 0, Math.PI*2);
+    c.fillStyle = `hsla(${340+fp.hue},65%,78%,1)`;
+    c.fill();
+    c.restore();
+    c.globalAlpha = 1;
+  }
+
+  const treeTop = project(0, -160, 0);
+  const glowR = c.createRadialGradient(treeTop.sx, treeTop.sy, 0, treeTop.sx, treeTop.sy, 80*zoom);
+  glowR.addColorStop(0, `rgba(255,130,180,${0.1 + 0.05*Math.sin(t)})`);
+  glowR.addColorStop(1, 'rgba(255,130,180,0)');
+  c.fillStyle = glowR;
+  c.fillRect(0, 0, W, H);
+}
+
+draw();
+
+ctx2.addEventListener('mousedown', e => { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+ctx2.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  rotY += (e.clientX - lastMX) * 0.008;
+  rotX += (e.clientY - lastMY) * 0.006;
+  rotX = Math.max(-1, Math.min(0.5, rotX));
+  lastMX = e.clientX; lastMY = e.clientY;
+});
+ctx2.addEventListener('mouseup', () => dragging = false);
+ctx2.addEventListener('mouseleave', () => dragging = false);
+
+ctx2.addEventListener('touchstart', e => { dragging = true; lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY; });
+ctx2.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  e.preventDefault();
+  rotY += (e.touches[0].clientX - lastMX) * 0.008;
+  rotX += (e.touches[0].clientY - lastMY) * 0.006;
+  rotX = Math.max(-1, Math.min(0.5, rotX));
+  lastMX = e.touches[0].clientX; lastMY = e.touches[0].clientY;
+}, {passive:false});
+ctx2.addEventListener('touchend', () => dragging = false);
+
+window.addEventListener('wheel', e => {
+  zoom *= e.deltaY > 0 ? 0.95 : 1.05;
+  zoom = Math.max(0.4, Math.min(2.5, zoom));
+});
+
+setInterval(() => { if (!dragging) rotY += 0.003; }, 16);
+
+function togglePetals() { petalsActive = !petalsActive; }
+function toggleNight() { nightMode = !nightMode; }
+
+function openLetter() {
+  document.getElementById('letter-overlay').classList.add('open');
+}
+function closeLetter(e) {
+  if (!e || e.target === document.getElementById('letter-overlay') || e.currentTarget.classList.contains('close-btn')) {
+    document.getElementById('letter-overlay').classList.remove('open');
+  }
+}
+</script>
+</body>
+</html>
